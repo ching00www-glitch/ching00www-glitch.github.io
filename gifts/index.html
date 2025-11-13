@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>聖誕老人很忙：接禮物遊戲</title>
-    <!-- Load Tailwind CSS for utility classes -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
@@ -36,23 +35,10 @@
             position: relative;
             width: 100%;
             padding-top: 75%; /* 4:3 Aspect Ratio */
-            background: linear-gradient(to bottom, #1a237e 0%, #3f51b5 50%, #e0f2f1 100%); /* Night sky to snowy ground */
+            /* === MODIFICATION 1: Use background.jpg.webp as the game board background === */
+            background: url('background.jpg.webp') no-repeat center center / cover;
             overflow: hidden;
-        }
-        
-        /* Add subtle star effect for night sky */
-        .game-board::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 50%;
-            background-image: radial-gradient(white 1px, transparent 1px), radial-gradient(white 1px, transparent 1px);
-            background-size: 50px 50px, 30px 30px;
-            background-position: 0 0, 10px 10px;
-            opacity: 0.5;
-            z-index: 8; /* Below items, above snow */
+            /* 移除原有的漸變背景和星星效果，讓圖片完全顯示 */
         }
         
         /* --- 雪花效果 (Snow Effect) --- */
@@ -93,12 +79,17 @@
             height: 10%;
             max-width: 80px;
             max-height: 80px;
-            /* 移除 transition，改用 JS 控制的平滑移動 */
             cursor: grab;
             user-select: none;
-            font-size: 3.5rem; /* Slightly larger Santa */
+            /* 移除 font-size，改用圖片 */
             text-align: center;
             z-index: 20;
+        }
+        /* === MODIFICATION 2: Style for the player image within the santa container === */
+        .santa img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain; /* 確保圖片在容器內完整顯示 */
         }
 
         .item {
@@ -195,7 +186,7 @@
             min-width: 100px;
         }
         @media (min-width: 768px) {
-             .difficulty-btn {
+            .difficulty-btn {
                 min-width: 150px;
             }
         }
@@ -204,29 +195,23 @@
 </head>
 <body>
 
-<!-- Background Music Element -->
 <audio id="bg-music" loop>
-    <!-- 提示: 請替換此處的 src 屬性為一個實際的聖誕音樂檔案連結，例如：-->
-    <!-- 由於版權問題，此處僅使用佔位符。在實際運行環境中，請使用無版權的聖誕音樂。 -->
     <source src="https://www.learningcontainer.com/wp-content/uploads/2020/02/Sample-MP3-File.mp3" type="audio/mpeg">
     您的瀏覽器不支持音頻播放。
 </audio>
 
 <div id="app" class="game-container">
     
-    <!-- Header: Scoreboard and Timer -->
     <div class="w-full p-4 bg-red-700 flex justify-around items-center rounded-t-xl text-white font-black text-xs md:text-2xl shadow-lg z-10">
         <div class="flex flex-col items-center">
             <span>回合 🌟</span>
             <span id="level-display" class="text-2xl md:text-4xl text-green-300">1</span>
         </div>
         <div class="flex flex-col items-center">
-            <!-- 禮物分數 (用於過關目標) -->
             <span>禮物分數 🎁</span>
             <span id="score-display" class="text-2xl md:text-4xl text-yellow-300">0</span>
         </div>
         <div class="flex flex-col items-center">
-            <!-- 金錢 (獨立計算) -->
             <span>金錢 💰</span>
             <span id="money-display" class="text-2xl md:text-4xl text-yellow-300">0</span>
         </div>
@@ -240,30 +225,24 @@
         </div>
     </div>
 
-    <!-- Game Board -->
     <div id="game-board" class="game-board">
-        <!-- 雪花效果 -->
         <div class="snow"></div>
-        <!-- Santa Catcher -->
-        <div id="santa" class="santa">🎅</div>
-        <!-- Items (Gifts/Bombs/Coins) will be appended here -->
-    </div>
+        <div id="santa" class="santa">
+            <img src="player.jpg" alt="遊戲角色">
+        </div>
+        </div>
     
-    <!-- Controls and Difficulty Selection -->
     <div class="w-full p-4 bg-green-800 flex flex-col md:flex-row justify-center items-center gap-2 rounded-b-xl shadow-lg">
         <div class="text-white font-black text-lg hidden md:block">選擇挑戰:</div>
-        <!-- 移除難度旁邊的分數文字 -->
         <button id="difficulty-easy" data-difficulty="easy" class="difficulty-btn bg-yellow-300 hover:bg-yellow-400 text-red-800 font-black py-2 px-4 rounded-full shadow-md transition transform hover:scale-105">簡單 🍬</button>
         <button id="difficulty-medium" data-difficulty="medium" class="difficulty-btn bg-yellow-300 hover:bg-yellow-400 text-red-800 font-black py-2 px-4 rounded-full shadow-md transition transform hover:scale-105">中等 🎁</button>
         <button id="difficulty-hard" data-difficulty="hard" class="difficulty-btn bg-yellow-300 hover:bg-yellow-400 text-red-800 font-black py-2 px-4 rounded-full shadow-md transition transform hover:scale-105">困難 💎</button>
         
-        <!-- 新增主要重新開始按鈕 -->
         <button id="main-restart-button" class="bg-purple-600 hover:bg-purple-700 text-white font-black py-2 px-6 rounded-full shadow-md transition transform hover:scale-105 md:ml-4">重新開始 🔄</button>
     </div>
 
 </div>
 
-<!-- Start/End Game Modal -->
 <div id="game-modal" class="modal">
     <div class="bg-white p-8 rounded-2xl text-center shadow-2xl max-w-sm w-11/12 border-8 border-red-500">
         <h2 id="modal-title" class="text-4xl font-black mb-4 text-green-700">遊戲暫停</h2>
@@ -780,3 +759,5 @@
         initialSetup();
     }
 </script>
+</body>
+</html>
