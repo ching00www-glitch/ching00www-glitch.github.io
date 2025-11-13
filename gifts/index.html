@@ -35,10 +35,9 @@
             position: relative;
             width: 100%;
             padding-top: 75%; /* 4:3 Aspect Ratio */
-            /* === MODIFICATION 1: Use background.jpg.webp as the game board background === */
+            /* 背景圖片: background.jpg.webp */
             background: url('background.jpg.webp') no-repeat center center / cover;
             overflow: hidden;
-            /* 移除原有的漸變背景和星星效果，讓圖片完全顯示 */
         }
         
         /* --- 雪花效果 (Snow Effect) --- */
@@ -81,11 +80,10 @@
             max-height: 80px;
             cursor: grab;
             user-select: none;
-            /* 移除 font-size，改用圖片 */
             text-align: center;
             z-index: 20;
         }
-        /* === MODIFICATION 2: Style for the player image within the santa container === */
+        /* Style for the player image within the santa container */
         .santa img {
             width: 100%;
             height: 100%;
@@ -99,11 +97,18 @@
             height: 8%;
             max-width: 60px;
             max-height: 60px;
-            font-size: 3rem;
+            font-size: 3rem; /* 保持這個大小以適用於 Emoji (炸彈/金錢) */
             text-align: center;
             animation: fall linear forwards;
             user-select: none;
             z-index: 10;
+        }
+        
+        /* 掉落物的圖片樣式 (用於禮物圖片) */
+        .item img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
         }
         
         @keyframes fall {
@@ -228,7 +233,7 @@
     <div id="game-board" class="game-board">
         <div class="snow"></div>
         <div id="santa" class="santa">
-            <img src="player.jpg" alt="遊戲角色">
+            <img src="player2.jpg.wepb" alt="遊戲角色">
         </div>
         </div>
     
@@ -278,6 +283,13 @@
         currentInterval: 0,
         currentTargetScore: 0,
     };
+    
+    // === MODIFICATION 4: 掉落禮物圖片列表 ===
+    const giftImages = [
+        'gift1.jpg.wegb',
+        'gift2.jpg.wegb',
+        'gift3.jpg.wegb'
+    ];
 
     // --- DOM Elements ---
     const gameBoard = document.getElementById('game-board');
@@ -404,21 +416,23 @@
         const rand = Math.random();
         let isBomb = rand < gameState.currentBombChance;
         let itemType = 'gift'; // Default to gift
-        let itemEmoji = '🎁';
+        let itemContent = ''; // Content can be image HTML or Emoji
         
         if (isBomb) {
             itemType = 'bomb';
-            itemEmoji = '💣';
+            itemContent = '💣'; // Emoji
         } else {
-            // 70% chance of point-giving gift (🎁/🍬), 30% chance of money (💰)
+            // 70% chance of point-giving gift, 30% chance of money
             if (rand < gameState.currentBombChance + (1 - gameState.currentBombChance) * 0.7) {
-                // Gift for score (70% of non-bomb items)
+                // Gift for score (Image)
                 itemType = 'gift';
-                itemEmoji = Math.random() > 0.5 ? '🎁' : '🍬'; // Use gift or candy for points
+                // 隨機選擇一個禮物圖片
+                const giftSrc = giftImages[Math.floor(Math.random() * giftImages.length)];
+                itemContent = `<img src="${giftSrc}" alt="禮物">`;
             } else {
-                // Coin for money (30% of non-bomb items)
+                // Coin for money (Emoji)
                 itemType = 'money';
-                itemEmoji = '💰';
+                itemContent = '💰';
             }
         }
 
@@ -429,7 +443,7 @@
         
         itemElement.dataset.type = itemType;
         itemElement.dataset.value = itemValue;
-        itemElement.innerHTML = itemEmoji; 
+        itemElement.innerHTML = itemContent; // Set content
 
         const startX = Math.random() * 90; 
         itemElement.style.left = `${startX}%`;
@@ -496,7 +510,7 @@
         
         if (type === 'gift' || type === 'money') {
             if (type === 'gift') {
-                // Gift/Candy gives Score (for level progression)
+                // Gift gives Score (for level progression)
                 gameState.score = Math.min(gameState.maxScore, gameState.score + value);
                 showFeedback(`🎉 ${praise} +${value}分`, santa.offsetLeft + santa.offsetWidth / 2, item.offsetTop);
             } else if (type === 'money') {
