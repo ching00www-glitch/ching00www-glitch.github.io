@@ -236,3 +236,542 @@
             <img src="player2.jpg.webp" alt="遊戲角色">
         </div>
         </div>
+    
+    <div class="w-full p-4 bg-green-800 flex flex-col md:flex-row justify-center items-center gap-2 rounded-b-xl shadow-lg">
+        <div class="text-white font-black text-lg hidden md:block">選擇挑戰:</div>
+        <button id="difficulty-easy" data-difficulty="easy" class="difficulty-btn bg-yellow-300 hover:bg-yellow-400 text-red-800 font-black py-2 px-4 rounded-full shadow-md transition transform hover:scale-105">簡單 🍬</button>
+        <button id="difficulty-medium" data-difficulty="medium" class="difficulty-btn bg-yellow-300 hover:bg-yellow-400 text-red-800 font-black py-2 px-4 rounded-full shadow-md transition transform hover:scale-105">中等 🎁</button>
+        <button id="difficulty-hard" data-difficulty="hard" class="difficulty-btn bg-yellow-300 hover:bg-yellow-400 text-red-800 font-black py-2 px-4 rounded-full shadow-md transition transform hover:scale-105">困難 💎</button>
+        
+        <button id="main-restart-button" class="bg-purple-600 hover:bg-purple-700 text-white font-black py-2 px-6 rounded-full shadow-md transition transform hover:scale-105 md:ml-4">重新開始 🔄</button>
+    </div>
+
+</div>
+
+<div id="game-modal" class="modal">
+    <div class="bg-white p-8 rounded-2xl text-center shadow-2xl max-w-sm w-11/12 border-8 border-red-500">
+        <h2 id="modal-title" class="text-4xl font-black mb-4 text-green-700">遊戲暫停</h2>
+        <p id="modal-message" class="text-lg mb-6 text-gray-700">回合結束或遊戲結束訊息。</p>
+        <button id="modal-next-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-full shadow-lg transition transform hover:scale-105 hidden">下一回合</button>
+        <button id="modal-restart-button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 rounded-full shadow-lg transition transform hover:scale-105 hidden">重新選擇難度</button>
+    </div>
+</div>
+
+<script>
+    // --- Configuration and State Variables ---
+    const config = {
+        EASY: { interval: 1500, speed: 2.0, maxItems: 10, targetScore: 25, bombChance: 0.15 }, 
+        MEDIUM: { interval: 1000, speed: 3.0, maxItems: 15, targetScore: 75, bombChance: 0.25 }, 
+        HARD: { interval: 700, speed: 4.0, maxItems: 20, targetScore: 150, bombChance: 0.35 }
+    };
+
+    let gameState = {
+        level: 1,
+        score: 0, // 禮物分數 (用於過關目標)
+        money: 0, // 金錢 (獨立計算)
+        lives: 3,
+        timer: 0,
+        gameRunning: false,
+        santaX: 50, 
+        difficulty: 'easy', 
+        maxScore: 200, 
+        bombValue: 1,
+        itemCount: 0,
+        itemTimer: null,
+        gameTimer: null,
+        currentSpeed: 0,
+        currentInterval: 0,
+        currentTargetScore: 0,
+    };
+    
+    // === MODIFICATION: 掉落禮物圖片列表 (修正為 .webp) ===
+    const giftImages = [
+        'gift1.jpg.webp',
+        'gift2.jpg.webp',
+        'gift3.jpg.webp'
+    ];
+
+    // --- DOM Elements ---
+    const gameBoard = document.getElementById('game-board');
+    const santa = document.getElementById('santa');
+    const scoreDisplay = document.getElementById('score-display');
+    const moneyDisplay = document.getElementById('money-display'); // New element
+    const livesDisplay = document.getElementById('lives-display');
+    const timerDisplay = document.getElementById('timer-display');
+    const levelDisplay = document.getElementById('level-display');
+    const gameModal = document.getElementById('game-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalMessage = document.getElementById('modal-message');
+    const modalNextButton = document.getElementById('modal-next-button');
+    const modalRestartButton = document.getElementById('modal-restart-button'); 
+    const mainRestartButton = document.getElementById('main-restart-button');
+    const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+    const bgMusic = document.getElementById('bg-music'); 
+    
+    const burnedSantaEmoji = '😢';
+    
+    // Continuous Movement Variables
+    let keysPressed = {};
+    let moveInterval = null;
+    const MOVE_STEP = 3; // Percentage move step for continuous movement
+    const MOVE_INTERVAL_MS = 30; // 33 FPS for movement
+
+    // --- Utility Functions ---
+
+    /**
+     * Updates the UI elements based on the current gameState.
+     */
+    function updateUI() {
+        scoreDisplay.textContent = gameState.score;
+        moneyDisplay.textContent = gameState.money; // Update money display
+        livesDisplay.textContent = gameState.lives;
+        timerDisplay.textContent = gameState.timer;
+        levelDisplay.textContent = gameState.level;
+        santa.style.left = `${gameState.santaX}%`;
+
+        // Update lives hearts
+        const hearts = '❤️'.repeat(gameState.lives) + '💔'.repeat(3 - gameState.lives);
+        livesDisplay.innerHTML = hearts;
+    }
+
+    /**
+     * Initializes game settings based on selected difficulty and current level.
+     */
+    function applyDifficulty(difficulty, level) {
+        let baseConfig = config[difficulty.toUpperCase()];
+        if (!baseConfig) return;
+        const levelFactor = 1 + (level - 1) * 0.15;
+        
+        gameState.currentInterval = Math.max(200, baseConfig.interval / levelFactor);
+        gameState.currentSpeed = baseConfig.speed * levelFactor;
+        gameState.currentTargetScore = baseConfig.targetScore;
+        gameState.currentBombChance = Math.min(0.7, baseConfig.bombChance * levelFactor);
+    }
+    
+    /**
+     * Resets the game state for a new round/level.
+     */
+    function resetGame(startNewGame = false) {
+        stopGame();
+        
+        if (startNewGame) {
+            gameState.level = 1;
+            gameState.lives = 3;
+            gameState.score = 0;
+            gameState.money = 0; // Reset money on new game
+            gameState.santaX = 50;
+        }
+
+        gameState.timer = 60;
+        gameState.itemCount = 0;
+        
+        document.querySelectorAll('.item').forEach(item => item.remove());
+        applyDifficulty(gameState.difficulty, gameState.level);
+        updateUI();
+    }
+
+    /**
+     * Handles the start of the game or next level.
+     */
+    function startGame() {
+        gameModal.style.display = 'none';
+
+        resetGame(false); 
+        gameState.gameRunning = true;
+
+        // Play music - usually requires prior user interaction
+        bgMusic.volume = 0.5; 
+        bgMusic.play().catch(e => console.log("Audio autoplay prevented. User interaction required.", e));
+
+        gameState.itemTimer = setInterval(dropItem, gameState.currentInterval);
+
+        gameState.gameTimer = setInterval(() => {
+            gameState.timer--;
+            if (gameState.timer <= 0) {
+                endRound(true);
+            }
+            updateUI();
+        }, 1000);
+
+        requestAnimationFrame(checkCollisions);
+    }
+
+    /**
+     * Stops all game loops (item dropping, timer, and movement).
+     */
+    function stopGame() {
+        gameState.gameRunning = false;
+        clearInterval(gameState.itemTimer);
+        clearInterval(gameState.gameTimer);
+        stopContinuousMovement(); // Stop keyboard movement
+        bgMusic.pause(); 
+    }
+
+    /**
+     * Creates and drops a new item (Gift, Coin, or Bomb).
+     */
+    function dropItem() {
+        if (!gameState.gameRunning) return;
+        
+        const rand = Math.random();
+        let isBomb = rand < gameState.currentBombChance;
+        let itemType = 'gift'; // Default to gift
+        let itemContent = ''; // Content can be image HTML or Emoji
+        
+        if (isBomb) {
+            itemType = 'bomb';
+            itemContent = '💣'; // Emoji
+        } else {
+            // 70% chance of point-giving gift, 30% chance of money
+            if (rand < gameState.currentBombChance + (1 - gameState.currentBombChance) * 0.7) {
+                // Gift for score (Image)
+                itemType = 'gift';
+                // 隨機選擇一個禮物圖片
+                const giftSrc = giftImages[Math.floor(Math.random() * giftImages.length)];
+                itemContent = `<img src="${giftSrc}" alt="禮物">`;
+            } else {
+                // Coin for money (Emoji)
+                itemType = 'money';
+                itemContent = '💰';
+            }
+        }
+
+        const itemElement = document.createElement('div');
+        itemElement.classList.add('item');
+
+        const itemValue = Math.floor(Math.random() * 6) + 5; // 5 to 10 points/money
+        
+        itemElement.dataset.type = itemType;
+        itemElement.dataset.value = itemValue;
+        itemElement.innerHTML = itemContent; // Set content
+
+        const startX = Math.random() * 90; 
+        itemElement.style.left = `${startX}%`;
+
+        const duration = gameBoard.offsetHeight / (gameState.currentSpeed * 50); 
+        itemElement.style.animationDuration = `${duration}s`;
+        
+        itemElement.id = 'item-' + gameState.itemCount++;
+        gameBoard.appendChild(itemElement);
+
+        itemFall(itemElement);
+    }
+
+    /**
+     * Tracks the falling item's position and checks for collisions.
+     */
+    function itemFall(item) {
+        item.addEventListener('animationend', () => {
+            if (gameBoard.contains(item)) {
+                item.remove();
+            }
+        });
+    }
+
+    /**
+     * Checks for collision between Santa and the items.
+     */
+    function checkCollisions() {
+        requestAnimationFrame(checkCollisions);
+
+        if (!gameState.gameRunning) {
+             return;
+        }
+
+        const santaRect = santa.getBoundingClientRect();
+        const items = document.querySelectorAll('.item');
+
+        items.forEach(item => {
+            if (!gameBoard.contains(item)) return; 
+            
+            const itemRect = item.getBoundingClientRect();
+
+            if (
+                itemRect.bottom > santaRect.top &&
+                itemRect.top < santaRect.bottom &&
+                itemRect.right > santaRect.left &&
+                itemRect.left < santaRect.right
+            ) {
+                handleCollision(item);
+            }
+        });
+    }
+
+    /**
+     * Handles the outcome of Santa catching an item.
+     */
+    function handleCollision(item) {
+        const type = item.dataset.type;
+        const value = parseInt(item.dataset.value);
+        const phrases = ['太棒了!', '好準!', '聖誕快樂!', '完美!', '耶!'];
+        const praise = phrases[Math.floor(Math.random() * phrases.length)];
+
+        item.remove(); 
+        
+        if (type === 'gift' || type === 'money') {
+            if (type === 'gift') {
+                // Gift gives Score (for level progression)
+                gameState.score = Math.min(gameState.maxScore, gameState.score + value);
+                showFeedback(`🎉 ${praise} +${value}分`, santa.offsetLeft + santa.offsetWidth / 2, item.offsetTop);
+            } else if (type === 'money') {
+                // Coin gives Money (separate currency)
+                gameState.money += value;
+                showFeedback(`💵 收到金錢 +${value}`, santa.offsetLeft + santa.offsetWidth / 2, item.offsetTop);
+            }
+        } else if (type === 'bomb') {
+            gameState.lives = Math.max(0, gameState.lives - 1);
+            showBombFeedback(item.offsetLeft, item.offsetTop);
+        }
+
+        updateUI();
+
+        if (gameState.lives <= 0) {
+            endRound(false); 
+        }
+    }
+
+    /**
+     * Shows positive text feedback from Santa.
+     */
+    function showFeedback(text, x, y) {
+        const feedback = document.createElement('div');
+        feedback.classList.add('feedback-message');
+        feedback.textContent = text;
+        
+        const boardRect = gameBoard.getBoundingClientRect();
+        const relativeX = x - boardRect.left;
+        const relativeY = y - boardRect.top;
+
+        feedback.style.left = `${relativeX}px`;
+        feedback.style.top = `${relativeY}px`;
+        gameBoard.appendChild(feedback);
+
+        setTimeout(() => feedback.remove(), 1500);
+    }
+
+    /**
+     * Shows bomb hit effects.
+     */
+    function showBombFeedback(x, y) {
+        const explosion = document.createElement('div');
+        explosion.classList.add('explosion');
+        explosion.innerHTML = '💥';
+        
+        const boardRect = gameBoard.getBoundingClientRect();
+        const relativeX = x - boardRect.left;
+        const relativeY = y - boardRect.top;
+
+        explosion.style.left = `${relativeX}px`;
+        explosion.style.top = `${relativeY}px`;
+        gameBoard.appendChild(explosion);
+
+        const burnedSanta = document.createElement('div');
+        burnedSanta.classList.add('burned-santa');
+        burnedSanta.innerHTML = `${burnedSantaEmoji} 🔥`; 
+        gameBoard.appendChild(burnedSanta);
+
+        setTimeout(() => explosion.remove(), 600);
+        setTimeout(() => burnedSanta.remove(), 1000);
+    }
+    
+    /**
+     * Handles the end of a round, either by timer or running out of lives.
+     */
+    function endRound(timerExpired) {
+        stopGame();
+        
+        let message = '';
+        let title = '';
+        
+        if (gameState.lives <= 0) {
+            title = '遊戲結束！';
+            message = `您接到了 ${gameState.score} 禮物分數和 ${gameState.money} 金錢。太可惜了！`;
+            modalNextButton.classList.add('hidden');
+            modalRestartButton.classList.remove('hidden');
+        } else if (timerExpired) {
+            if (gameState.score >= gameState.currentTargetScore) {
+                title = '太棒了！ 回合完成！';
+                message = `恭喜！您獲得了 ${gameState.score} 禮物分數和 ${gameState.money} 金錢。成功達到 ${gameState.currentTargetScore} 分的目標！準備挑戰第 ${gameState.level + 1} 回合！`;
+                modalNextButton.classList.remove('hidden');
+                modalRestartButton.classList.add('hidden');
+                gameState.level++; 
+            } else {
+                title = '挑戰失敗！';
+                message = `時間到！您只獲得了 ${gameState.score} 禮物分數，未達到 ${gameState.currentTargetScore} 分的目標。請再試一次！`;
+                modalNextButton.classList.add('hidden');
+                modalRestartButton.classList.remove('hidden');
+            }
+        }
+
+        modalTitle.textContent = title;
+        modalMessage.innerHTML = message; 
+        gameModal.style.display = 'flex'; 
+    }
+
+    /**
+     * Handles keyboard down event to start continuous movement.
+     */
+    function handleKeyDown(e) {
+        if (!gameState.gameRunning) return;
+        
+        const key = e.key.toLowerCase();
+        if (key === 'arrowleft' || key === 'a' || key === 'arrowright' || key === 'd') {
+            keysPressed[key] = true;
+            startContinuousMovement();
+            e.preventDefault(); // Prevent default browser actions
+        }
+    }
+
+    /**
+     * Handles keyboard up event to stop continuous movement.
+     */
+    function handleKeyUp(e) {
+        const key = e.key.toLowerCase();
+        if (key === 'arrowleft' || key === 'a' || key === 'arrowright' || key === 'd') {
+            delete keysPressed[key];
+            if (Object.keys(keysPressed).length === 0) {
+                stopContinuousMovement();
+            }
+        }
+    }
+
+    /**
+     * Starts the interval for continuous Santa movement.
+     */
+    function startContinuousMovement() {
+        if (moveInterval) return; 
+
+        moveInterval = setInterval(() => {
+            let moved = false;
+            
+            if (keysPressed['arrowleft'] || keysPressed['a']) {
+                gameState.santaX = Math.max(0, gameState.santaX - MOVE_STEP);
+                moved = true;
+            } else if (keysPressed['arrowright'] || keysPressed['d']) {
+                // Max position is 100% minus Santa's width (10%)
+                gameState.santaX = Math.min(90, gameState.santaX + MOVE_STEP);
+                moved = true;
+            }
+
+            if (moved) {
+                updateUI();
+            }
+        }, MOVE_INTERVAL_MS);
+    }
+
+    /**
+     * Stops the interval for continuous Santa movement.
+     */
+    function stopContinuousMovement() {
+        clearInterval(moveInterval);
+        moveInterval = null;
+    }
+
+    /**
+     * Sets the default easy difficulty and starts the game.
+     */
+    function initialSetup() {
+        // 預設選擇「簡單」按鈕
+        difficultyButtons.forEach(btn => btn.classList.remove('ring-4', 'ring-red-500'));
+        document.getElementById('difficulty-easy').classList.add('ring-4', 'ring-red-500');
+
+        gameState.difficulty = 'easy';
+        gameState.level = 1;
+        gameState.lives = 3;
+        gameState.score = 0;
+        gameState.money = 0;
+        
+        startGame(); // 直接開始遊戲
+    }
+
+    /**
+     * Function to handle the main Restart button click.
+     */
+    function restartGameFlow() {
+        // 重設遊戲狀態，但保留當前選擇的難度
+        stopGame();
+        resetGame(true); 
+        startGame(); 
+    }
+
+
+    // --- Event Listeners Initialization ---
+
+    // 1. Difficulty Selection - Now starts the game immediately with new difficulty
+    difficultyButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            // Highlight the selected difficulty button
+            difficultyButtons.forEach(btn => btn.classList.remove('ring-4', 'ring-red-500'));
+            button.classList.add('ring-4', 'ring-red-500');
+
+            gameState.difficulty = button.dataset.difficulty;
+            
+            // Start a brand new game (reset all states) with the chosen difficulty
+            resetGame(true); 
+            startGame();
+        });
+    });
+
+    // 2. Modal Button Handlers (Only visible on Game Over / Level Up)
+    modalNextButton.addEventListener('click', startGame); 
+    modalRestartButton.addEventListener('click', initialSetup); // Game Over/Fail: 回到簡單難度重設
+
+    // 3. Main Control Panel Restart Button
+    mainRestartButton.addEventListener('click', restartGameFlow);
+
+    // 4. Santa Movement (Keyboard - Continuous)
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keyup', handleKeyUp);
+
+    // 5. Santa Movement (Touch - iPad/Mobile)
+    let touchStartX = 0;
+    let santaStartPos = 0;
+    let isDragging = false;
+    
+    gameBoard.addEventListener('touchstart', (e) => {
+        if (!gameState.gameRunning || e.touches.length !== 1) return;
+        
+        const santaRect = santa.getBoundingClientRect();
+        const touchY = e.touches[0].clientY;
+        
+        // Check if touch started near Santa
+        if (touchY > santaRect.top && touchY < santaRect.bottom + 50) {
+             e.preventDefault();
+             isDragging = true;
+             touchStartX = e.touches[0].clientX;
+             santaStartPos = gameState.santaX;
+        }
+
+    }, { passive: false });
+
+    gameBoard.addEventListener('touchmove', (e) => {
+        if (!gameState.gameRunning || !isDragging || e.touches.length !== 1) return;
+        e.preventDefault();
+        
+        const currentX = e.touches[0].clientX;
+        const deltaX = currentX - touchStartX;
+        
+        const boardWidth = gameBoard.offsetWidth;
+        const percentageChange = (deltaX / boardWidth) * 100;
+        
+        let newX = santaStartPos + percentageChange;
+        
+        gameState.santaX = Math.min(90, Math.max(0, newX));
+        updateUI();
+    }, { passive: false });
+
+    gameBoard.addEventListener('touchend', () => {
+        isDragging = false;
+    });
+    
+    // 6. Initialize Game
+    window.onload = function() {
+        santa.style.left = `${gameState.santaX}%`;
+        checkCollisions(); 
+        
+        // 遊戲載入完成後，立即以預設難度（簡單）開始
+        initialSetup();
+    }
+</script>
+</body>
+</html>
